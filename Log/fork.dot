@@ -1,0 +1,18 @@
+digraph G {
+    node [group=left, fontname=Consolas, shape=rect, style=rounded];
+    start [shape=none, label=""];
+    fork;
+    wait;
+    wait_end [label="", shape=point];
+    end [shape=none, label=""];
+
+    node [group=right, fontname=Consolas, shape=rect, style=rounded];
+    exec;
+    
+    start -> fork;
+    fork -> wait;
+    fork:e -> exec:n;
+    wait -> wait_end [style=dotted];
+    exec:s -> wait_end:e [label="SIGCHLD", style=dashed, fontname=Consolas];
+    wait_end -> end;
+}

@@ -55,7 +55,7 @@ I figured that if any of the `exec*` family system calls was called, I should be
 However, there was no trace in the logs for that ever happening, so I figured it must not have gotten that far. Then what I want to know now is what happened to prevent `exec` from being called.
 If you'll recall, in POSIX systems, the way to launch a new process is to first `fork`, then `exec` in the child and `wait` in the parent for a `SIGCHLD`:
 
-DIAGRAM
+![forkAndExec flow](forkAndExec.png)
 
 So I put a hook on `fork` with a log before and after the original `fork`:
 

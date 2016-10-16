@@ -1,0 +1,47 @@
+digraph G {
+    node [group=left, fontname=Consolas, shape=rect, style=rounded];
+    start [shape=none, label=""];
+    pipe;
+    fork;
+    read [shape=rect,style=rounded];
+    read_end [label="", shape=point];
+    wait [shape=rect,style=rounded];
+    wait_end [label="", shape=point];
+    end [shape=none, label=""];
+
+    node [group=middle, fontname=Consolas, shape=rect, style=rounded];
+    close [label="close(fd_read)"];
+    dup2 [label="dup2(fd_write, FAIL_FILENO)"];
+    closeall [label="close(fd > FAIL_FILENO)"];
+    fcntl [label="fcntl(FAIL_FILENO, F_SETFD, O_CLOEXEC)"];
+    exec;
+    exec_success [label="", shape=point, color=green];
+
+    node [group=right, fontname=Consolas, shape=rect, style=rounded];
+    write [color=red, fontcolor=red];
+    _exit [color=red, fontcolor=red];
+    
+    start -> pipe;
+    pipe ->  fork;
+    fork -> read;
+    read -> read_end [style=dashed];
+    read_end -> wait;
+    wait -> wait_end [style=dashed];
+    wait_end -> end;
+
+    fork:e -> close:n;
+    close -> dup2;
+    dup2 -> closeall;
+    closeall -> fcntl;
+    fcntl -> exec;
+    exec -> exec_success [color=green];
+    exec -> read_end [taillabel="pipe\nclosed", style=dotted, fontname=Consolas, fontcolor=green, color=green, labeldistance=8, labelangle=0];
+    exec_success -> wait_end [taillabel="SIGCHLD", style=dotted, fontname=Consolas, fontcolor=green, color=green, labeldistance=10, labelangle=0];
+
+    exec:e -> write:n [color=red];
+    write -> _exit [color=red];
+    write -> read_end [taillabel="errno\nwritten", style=dotted, fontname=Consolas, fontcolor=red, color=red, labeldistance=10, labelangle=-3];
+    _exit -> wait_end [taillabel="SIGCHLD", style=dotted, fontname=Consolas, fontcolor=red, color=red, labeldistance=10, labelangle=-3];
+
+    //exec:s -> wait_end:e [label="SIGCHLD", style=dashed, fontname=Consolas];
+}
