@@ -6,7 +6,7 @@ Regardless of the method of hooking, the basic concept is that suppose some syst
 
 This system allows us to implement specialized behaviours in processes but that is beyond the scope of this article.
 
-Another thing about our system (and I believe any other system out there) are logs. In order for us to be able to debug and verify the functionality of our product we have logs places all over the place detailing, for example, the value of the parameters in the entrace of functions and return values in their end.
+Another thing about our system (and I believe any other system out there) are logs. In order for us to be able to debug and verify the functionality of our product we have logs places all over the place detailing, for example, the value of the parameters in the entrance of functions and return values in their end.
 
 However, logs are something to be seen by the developers only, and they do add a bit of an overhead to the product, both in size (MiBs) and in performance, so we want to be able to easily switch them off.
 
@@ -17,19 +17,19 @@ To that end we have two build modes:
 ## The bug
 While running some tests on new applications, there was one application that would crash on some Galaxy device with Android 4.4. The crash would however only occur in debug, **not** release.
 
-The dev team member tasked with the issue managed to figure out the logs were probably at fault, and decided to discover which log specifically was at fault by using bisection. Basically binary search for the offending log but shutting down the logs in each module at a time, until the faulty module/s is/are found, and then shutting down specific logs inside the modules until the individial faulty logs are found.
+The dev team member tasked with the issue managed to figure out the logs were probably at fault, and decided to discover which log specifically was at fault by using bisection. Basically binary search for the offending log but shutting down the logs in each module at a time, until the faulty module/s is/are found, and then shutting down specific logs inside the modules until the individual faulty logs are found.
 
 The result was that the logs in the hooks for `dup2`, `close` and `execvpe` were the culprits. But the reason for them being faulty was not (yet) understood.
 
-Anyway, due to the fact the the crash was only in debug, the issue was deemed not interesting and was pushed to the bottom of the priority list.
+Anyway, due to the fact the crash was only in debug, the issue was deemed not interesting and was pushed to the bottom of the priority list.
 
 Fast forward several weeks. I'm working on the finishing touches of a new hooking mechanism (again, as I mentioned in the introduction, the method itself is not important here). While running sanity tests on Android 7, one of the applications tested would crash.
 
-As we tend to have many issues with debug-release discrepencies, the first thing I did was retry in relase. The application worked. This smelled oddly familier.
+As we tend to have many issues with debug-release discrepancies, the first thing I did was retry in release. The application worked. This smelled oddly familiar.
 
 ## Investigation
 
-Examining the crash log revealed the the cause of the crash was a Java exception which read as follows (redacted for readability):
+Examining the crash log revealed the cause of the crash was a Java exception which read as follows (redacted for readability):
 
     java.io.IOException: Cannot run program "chmod": error=456436480, Unknown error 456436480
         at java.lang.ProcessBuilder.start (ProcessBuilder.java:983)
@@ -40,9 +40,9 @@ Examining the crash log revealed the the cause of the crash was a Java exception
 
 However nice it is to have the location of the error pointed out to you, it's not too useful as I did not know what to look for, I needed some more focus.
 
-The stacktrace does tell us that the problem was that it could not run the command `chmod`. Seeing that the name of the classes are `ProcessBuilder` and `UNIXProcess`, and the function is `forkAndExec`, I assumed it did not mean the `chmod` system call, but the commandline utility `/system/bin/chmod`.
+The stack-trace does tell us that the problem was that it could not run the command `chmod`. Seeing that the name of the classes are `ProcessBuilder` and `UNIXProcess`, and the function is `forkAndExec`, I assumed it did not mean the `chmod` system call, but the command-line utility `/system/bin/chmod`.
 
-It seemed odd that this utility will be missing, moreso odd that it did not seem to pose a problem in release. But I tried anyway, I launched a shell on the device and tried to run `chmod`. It worked, of course.
+It seemed odd that this utility will be missing, more so odd that it did not seem to pose a problem in release. But I tried anyway, I launched a shell on the device and tried to run `chmod`. It worked, of course.
 
 I figured that if any of the `exec*` family system calls was called, I should be able to see it in the logs, as we have hooks on them and logs before calling the original `exec`. Sort of like this:
 
@@ -70,7 +70,7 @@ So I put a hook on `fork` with a log before and after the original `fork`:
 
 And the same on `wait4` (all `wait` variants eventually use `wait4`). And just as expected, I saw 3 log lines for `fork` (one before the fork, and two after it - child and parent), and a log line for `wait4`. So the conclusion was that `fork` did happen, but it did not reach `exec`.
 
-But then I remembered that a teammate of mine, who by that time had accumulated some milage with Android 7, told me that he noticed the logging daemon tends to drop some log lines, maybe as a sort of throttling mechanism. His solution at the time was to modify the `LOG` function to write into a file on the SDCard, which he would pull from the device later on an examine offline. I found this method slightly cumbersome, so insted what I did was launch a listening netcat on my machine (`nc -l 1337`), and have the `LOG` function write to a socket connected to my machine:
+But then I remembered that a teammate of mine, who by that time had accumulated some mileage with Android 7, told me that he noticed the logging daemon tends to drop some log lines, maybe as a sort of throttling mechanism. His solution at the time was to modify the `LOG` function to write into a file on the SDCard, which he would pull from the device later on an examine off-line. I found this method slightly cumbersome, so instead what I did was launch a listening netcat on my machine (`nc -l 1337`), and have the `LOG` function write to a socket connected to my machine:
     
     void LOG(const char * fmt, ...)
     {
@@ -85,9 +85,9 @@ Now I should be able to see all the logs, not exceptions. I launch the app, exam
 
 However, this time around, though the contents of the log did not change, I did, or more precisely, my perception got keener. First, you must understand that we do not have hooks on just the 3 functions I mentioned, we have hooks on many other functions, as required by the special behaviour we want to add to the application. So what I noticed, was that the last log line in the child process was a `close`. In fact, there was a whole bunch of them in succession.
 
-So I tought, that if my socket is in that list of `close`s, it would make sense that I stop seeing any log traffic. This is easy to verify, just log the `fd` of the logging socket after creating it and see if that `fd` is closed. And lo and behold, the socket's `fd` was in fact the last one closed in the child.
+So I thought, that if my socket is in that list of `close`s, it would make sense that I stop seeing any log traffic. This is easy to verify, just log the `fd` of the logging socket after creating it and see if that `fd` is closed. And lo and behold, the socket's `fd` was in fact the last one closed in the child.
 
-This is very odd though, why would something in the process close my socket? In any case, this is an easy fix, since I know the `fd` of the socket, and I control the behavior of `close`, I can set it up so that if someone tries to close my socket, I'll just not do it, and report that I did:
+This is very odd though, why would something in the process close my socket? In any case, this is an easy fix, since I know the `fd` of the socket, and I control the behaviour of `close`, I can set it up so that if someone tries to close my socket, I'll just not do it, and report that I did:
 
     /* logging.c */
     int log_socket = -1;
@@ -106,19 +106,19 @@ This is very odd though, why would something in the process close my socket? In 
         return close(fd);
     }
 
-With the new bandaid in place I was excited to finally be able to see those `exec` logs. And I did! `exec` was in-fact called. Just to verify it was actually called I placed a log before **and** after the call to the real `exec` and I just saw the first one, which means the `exec` did succeed. But then, why does the Java framework think it failed?
+With the new band-aid in place I was excited to finally be able to see those `exec` logs. And I did! `exec` was in-fact called. Just to verify it was actually called I placed a log before **and** after the call to the real `exec` and I just saw the first one, which means the `exec` did succeed. But then, why does the Java framework think it failed?
 
 In my puzzled state I started just adding logs everywhere to try and make sense of what's going on there, and while doing that I decided that since my new logging channel is doing so well, I can do away with the `adb` log, so I commented out the `__android_log_vprint` from the `LOG` implementation.
 
 The application worked.
 
-To me this was a dead giveaway that something the logging library does is the source of the problem, but I had no concrete direction. What I did have though was a name, the name from the Java stacktrace. So I decided it's about time I find that source code and try to make some sense of it.
+To me this was a dead giveaway that something the logging library does is the source of the problem, but I had no concrete direction. What I did have though was a name, the name from the Java stack-trace. So I decided it's about time I find that source code and try to make some sense of it.
 
-Using [androidxref](http://androidxref.com/) I quickly found the implementation of `forkAndExec` in [`/libcore/ojluni/src/main/native/UNIXProcess_md.c`](http://androidxref.com/7.0.0_r1/xref/libcore/ojluni/src/main/native/UNIXProcess_md.c#833). The code is pretty well writted and documented, so it was not hard to understand how it works.
+Using [androidxref](http://androidxref.com/) I quickly found the implementation of `forkAndExec` in [`/libcore/ojluni/src/main/native/UNIXProcess_md.c`](http://androidxref.com/7.0.0_r1/xref/libcore/ojluni/src/main/native/UNIXProcess_md.c#833). The code is pretty well written and documented, so it was not hard to understand how it works.
 
 The main thing that the implementation addresses is that the parent process has no way of knowing whether the exec succeeded or not. So what they do it create a pipe before the call to `fork`, then in the child send the write end of the pipe to `O_CLOEXEC` (close-on-exec, meaning, the kernel should close this `fd` when performing `exec`), call `exec`, and after the `exec` (which should only happen in case of failure) write the `errno` into the pipe. Meanwhile, the parent reads from the pipe. If the `exec` succeeded, the pipe should close and 0 bytes should be read, if the `exec` failed, there should be 4 bytes waiting in the pipe indicating the reason for the failure.
 
-So, we already know what happened from the start, the stacktrace told us, the `exec` failed with `errno = 456436480 (=0x1b34ab00)`. This is unlike any `errno` I know of. A google search and an androidxref search confirmed it. Something here is clearly broken.
+So, we already know what happened from the start, the stack-trace told us, the `exec` failed with `errno = 456436480 (=0x1b34ab00)`. This is unlike any `errno` I know of. A Google search and an androidxref search confirmed it. Something here is clearly broken.
 
 Something else is clearly writing into that pipe, so maybe if I had the contents of the pipe it could point me at who is writing there, and WHY!
 
@@ -161,7 +161,7 @@ Just to highlight the key points in the child:
 
 This is where it finally clicked for me. You see, the logging facility on Android works by writing/sending a message to a device driver. On older Android versions it's `/dev/log/main` while on newer it's `/dev/socket/logdw`. The important thing though is that it boils down to a `writev` into an `fd`.
 
-Now, it maked sense that the logging library would be one of the first libraries loaded and have its initializer called. This means that when that socket is about to be created, there are only 3 occupied `fd`s: `0=STDIN_FILENO`, `1=STDOUT_FILENO`, `2=STDERR_FILENO`, so the socket will be assigned the next available `fd`: 3.
+Now, it makes sense that the logging library would be one of the first libraries loaded and have its initializer called. This means that when that socket is about to be created, there are only 3 occupied `fd`s: `0=STDIN_FILENO`, `1=STDOUT_FILENO`, `2=STDERR_FILENO`, so the socket will be assigned the next available `fd`: 3.
 
 Back to `forkAndExec`, when the child process `dup2`s the write end of the socket, nobody notifies the log library that its socket no longer exists, so when _someone_ (I) invokes `__android_log_vprint`, it happily writes into the `fd` it cached, which so happens to be 3, but now it's not a socket, it's a pipe.
 
