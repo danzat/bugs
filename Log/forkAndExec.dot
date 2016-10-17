@@ -11,14 +11,14 @@ digraph G {
 
     node [group=middle, fontname=Consolas, shape=rect, style=rounded];
     close [label="close(fd_read)"];
-    dup2 [label="dup2(fd_write, FAIL_FILENO)"];
-    closeall [label="close(fd > FAIL_FILENO)"];
-    fcntl [label="fcntl(FAIL_FILENO, F_SETFD, O_CLOEXEC)"];
+    dup2 [label="[1] dup2(fd_write, FAIL_FILENO)"];
+    closeall [label="[2] close(fd > FAIL_FILENO)"];
+    fcntl [label="[3] fcntl(FAIL_FILENO, F_SETFD, O_CLOEXEC)"];
     exec;
     exec_success [label="", shape=point, color=green];
 
     node [group=right, fontname=Consolas, shape=rect, style=rounded];
-    write [color=red, fontcolor=red];
+    write [color=red, fontcolor=red, label="[4] write(FAIL_FILENO, &errno, 4)"];
     _exit [color=red, fontcolor=red];
     
     start -> pipe;
@@ -42,6 +42,4 @@ digraph G {
     write -> _exit [color=red];
     write -> read_end [taillabel="errno\nwritten", style=dotted, fontname=Consolas, fontcolor=red, color=red, labeldistance=10, labelangle=-3];
     _exit -> wait_end [taillabel="SIGCHLD", style=dotted, fontname=Consolas, fontcolor=red, color=red, labeldistance=10, labelangle=-3];
-
-    //exec:s -> wait_end:e [label="SIGCHLD", style=dashed, fontname=Consolas];
 }
