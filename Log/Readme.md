@@ -159,13 +159,15 @@ Just to highlight the key points in the child:
 3. `fd=3` is set to `O_CLOEXEC`
 4. In case of `exec` failure, write the errno into the pipe
 
-This is where it finally clicked for me. You see, the logging facility on Android works by writing/sending a message to a device driver. On older Android versions it's `/dev/log/main` while on newer it's `/dev/socket/logdw`. The important thing though is that it boils down to a `writev` into an `fd`.
+This is where it finally clicked for me. Before I spell it out I'll give you one last hint:
+
+![forkAndExec flow with highlighted functions with hooks that log](forkAndExec-highlighted.dot.png)
+
+You see, the logging facility on Android works by writing/sending a message to a device driver. On older Android versions it's `/dev/log/main` while on newer it's `/dev/socket/logdw`. The important thing though is that it boils down to a `writev` into an `fd`.
 
 Now, it makes sense that the logging library would be one of the first libraries loaded and have its initializer called. This means that when that socket is about to be created, there are only 3 occupied `fd`s: `0=STDIN_FILENO`, `1=STDOUT_FILENO`, `2=STDERR_FILENO`, so the socket will be assigned the next available `fd`: 3.
 
 Back to `forkAndExec`, when the child process `dup2`s the write end of the socket, nobody notifies the log library that its socket no longer exists, so when _someone_ (I) invokes `__android_log_vprint`, it happily writes into the `fd` it cached, which so happens to be 3, but now it's not a socket, it's a pipe.
-
-DIAGRAM WITH HIGHLIGHTED HOOKS
 
 Seeing as we had logs in the hooks on all the function called within the child meant that we shoved garbage in the pipe, making it seem to the parent like the child's `exec` failed when it did not.
 
@@ -173,3 +175,4 @@ Seeing as we had logs in the hooks on all the function called within the child m
 
 ## Conclusions
 - Communication with your peers
+- It's nearly always **your** fault
