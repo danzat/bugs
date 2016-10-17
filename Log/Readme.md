@@ -1,6 +1,7 @@
 # Logging bug
 ## Introduction
-In our system we place hooks on various system functions in order to modify existing application behaviour.
+
+In our product we place hooks on various system functions in order to modify existing application behaviour.
 
 Regardless of the method of hooking, the basic concept is that suppose some system library implements function `F`, when that function is *hooked*, this means that if somewhere in the process some code calls `F`, it will end up reaching our own implementation of it which we will call `HOOK_F`. This implementation can wrap the original `F` with some code or might reimplement it completely.
 
@@ -15,6 +16,7 @@ To that end we have two build modes:
 - Release where all the logs are shut out by the preprocessor, so they don't even get compiled
 
 ## The bug
+
 While running some tests on new applications, there was one application that would crash on some Galaxy device with Android 4.4. The crash would however only occur in debug, **not** release.
 
 The dev team member tasked with the issue managed to figure out the logs were probably at fault, and decided to discover which log specifically was at fault by using bisection. Basically binary search for the offending log but shutting down the logs in each module at a time, until the faulty module/s is/are found, and then shutting down specific logs inside the modules until the individual faulty logs are found.
@@ -157,7 +159,7 @@ Just to highlight the key points in the child:
 1. The write end of the pipe is `dup2`ed to a constant `fd=3` (referred to `FAIL_FILENO`)
 2. All the `fd`s higher than 3 are `close`d
 3. `fd=3` is set to `O_CLOEXEC`
-4. In case of `exec` failure, write the errno into the pipe
+4. In case of `exec` failure, write the `errno` into `FAIL_FILENO`
 
 This is where it finally clicked for me. Before I spell it out I'll give you one last hint:
 
@@ -173,7 +175,36 @@ Seeing as we had logs in the hooks on all the function called within the child m
 
 ## Summary
 
+OK, so what did we have. We had a bug that would only happen in debug mode, where the reason for the bug was the presence of Android system logs.
+
+`forkAndExec` made me face two issues. The first was not related to the bug itself, but it did veil the evidence to it. Namely, the fact that all the file descriptors were forcefully closed which made me lose the alternative log channel. This was fixed by lying to the system about closing that specific socket.
+
+Once that obstacle was removed, 3 elements were required to reach the conclusion:
+
+1. The contents of the pipe that was used to transfer the status of `exec` were needed to tie Android's logging to the bug.
+2. Understanding how `liblog.so` works was in combination with a (justified) hypotheses about when it loads was required to understand that the logs are send via `fd=3`.
+3. Understanding the flow of `forkAndExec`, mainly the flow of the child process, was required to understand that there is a clash between the original and new role of `fd=3`.
+
+Once all the elements were understood, it was easy to connect the dots and find out what caused the bug: the presence of logs in the hooks on `close`, `dup2` and `execvpe`. Exactly what the original investigation led by the dev team member found.
+
 ## Conclusions
-- Communication with your peers
-- It's nearly always **your** fault
-- It's nearly always **your** fault
+
+###Communication with your peers
+
+It's important to have active and open conversations with peers about what it is you do.
+Had I not talked to the dev team member, and not known about his issue, I would have never made the connection between the two problems.
+And had my team member not told me about his problems with the weird behaviour of the logs on Android 7, I would not have been prompted to try and implement my own logging channel, which was instrumental to making progress.
+
+###Know your platform
+
+I don't believe this need any further explanation. Knowledge with the Linux system calls and with Android's logging mechanism were clearly required in this case. Learn about your platform and tools constantly.
+
+The fact I was familiar with Android's logging mechanism was only due to the fact that at some point in time I decided to randomly read it's code. Which leads me to the next point.
+
+###Read the code (RTFC?)
+
+If you already have source code available, you might as well read it, and read it carefully. Maybe if I had read it more carefully from the get-go, I would have discovered the problem sooner.
+
+###It's nearly always **your** fault
+
+It's always easier to blame something else: "It's the system's fault". This can make you look for the problem in the wrong places and waste precious time.
