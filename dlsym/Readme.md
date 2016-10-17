@@ -66,7 +66,23 @@ First, start with understanding how this `__builtin_return_address` works. From 
 >   This function returns the return address of the current function, or of one of its callers. The level argument is number of frames to scan up the call stack. A value of 0 yields the return address of the current function, a value of 1 yields the return address of the caller of the current function, and so forth. When inlining the expected behavior is that the function returns the address of the function that is returned to. To work around this behavior use the noinline function attribute.
 >   The level argument must be a constant integer.
 
-Since we wanted to know what `dlsym` actually returned, the hook on it looked something like this:
+OK, so first question, while `__builtin_return_address(1)`? This means `dlsym` wants to know who called the caller. Well, after further examination of the code, I saw that the `dlsym` that is actually exported is a wrapper to the `dlsym` implementation:
+
+    void* dlsym(void* handle, const char* symbol)
+    {
+        DYLD_LOCK_THIS_BLOCK;
+        static void* (*p)(void* handle, const char* symbol) = NULL;
+
+        if(p == NULL)
+            _dyld_func_lookup("__dyld_dlsym", (void**)&p);
+        return(p(handle, symbol));
+    }
+
+So the only remaining question is, why does the caller does not change in release.
+
+In order to answer that question, I had to examine the difference between `HOOK_dlsym` in debug and release.
+
+This is what `HOOK_dlsym` looks like in debug:
 
     void * HOOK_dlsym(void * handle, const char * name)
     {
@@ -84,7 +100,7 @@ Since we wanted to know what `dlsym` actually returned, the hook on it looked so
         return ret;
     }
 
-So what interest me is that second if clause, what would it look like in ARM assembly?
+So what interest me is that else clause, what would it look like in ARM assembly?
 
     ldr r0, [sp, #handle]
     ldr r1, [sp, #name]
@@ -97,6 +113,8 @@ So what interest me is that second if clause, what would it look like in ARM ass
     bl LOG
     ldr r0, [sp, #ret]
     bx lr
+
+That `bl dlsym` changes the value of `lr` to be a pointer in our library. Makes sense.
 
 How would that look in release?
 
@@ -120,13 +138,9 @@ So what interest me is that second if clause, what would it look like in ARM ass
     ldr r1, [sp, #offset_of_saved_name]
     b.w dlsym
 
-Notice how in debug `dlsym` was called with a branch-and-link (`bl`) while in debug it was just a regular branch (`b.w`)? This is called tail-call optimization. This happens when the last statement in a function is another function call, so that function can be in charge of *returning* to the caller.
+Ah, tail-call. Here `dlsym` was called using `b.w`, which does not change the link register (`lr`). So `lr` is preserved in it's original value, which is whoever called `dlsym` originally and ended up is `HOOK_dlsym`. Looks like I've been got by tail-call optimization.
 
-So if say we have the following call graph:
-
-picture of F1 -> F2 -> F3
-
-
+## Fix
 
 ## Summary
 
