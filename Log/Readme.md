@@ -148,7 +148,7 @@ Time to look at what's in that pipe, and ... it's the log itself!
 
 Just a quick reminder, I had two log channels, one on my machine to catch all the logs, and the one using `__android_log_vprint` to actually trigger the crash. So what I saw in the pipe must have been the log sent via `liblog`.
 
-So I want back to the code of `forkAndExec` to really understand what's going on, no detail looked over. I'll summarize the flow of `forkAndExec` in this diagram:
+So I went back to the code of `forkAndExec` to really understand what's going on, no detail looked over. I'll summarize the flow of `forkAndExec` in this diagram:
 
 ![forkAndExec flow](forkAndExec.dot.png)
 
@@ -175,4 +175,5 @@ Seeing as we had logs in the hooks on all the function called within the child m
 
 ## Conclusions
 - Communication with your peers
+- It's nearly always **your** fault
 - It's nearly always **your** fault
