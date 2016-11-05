@@ -1,0 +1,26 @@
+\documentclass[convert={density=300,size=1080x800,outext=.png}]{standalone}
+\usepackage{tikz}
+\usetikzlibrary{arrows,snakes,backgrounds}
+\begin{document}
+\begin{tikzpicture}[auto]
+
+\draw (0, 0) rectangle (2, -3);
+\draw (0, -3) rectangle (2, -5);
+\draw (0, -5) rectangle (2, -6);
+\draw (0, -6) rectangle (2, -8);
+\draw (0, -8) rectangle (2, -9);
+\draw (0, -9) rectangle (2, -11);
+\draw (0, -11) rectangle (2, -12);
+
+\node at (1, -1.5) {string pool};
+\node at (1, -4) {$\texttt{auxv}$};
+\node at (1, -5.5) {$\texttt{NULL}$};
+\node at (1, -7) {$\texttt{envp}$};
+\node at (1, -8.5) {$\texttt{NULL}$};
+\node at (1, -10) {$\texttt{argv}$};
+\node at (1, -11.5) {$\texttt{argc}$};
+
+\draw [->] (3, -12) -- (2, -12) node[auto,midway,below] {$\texttt{sp}$};
+
+\end{tikzpicture}
+\end{document}

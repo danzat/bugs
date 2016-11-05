@@ -16,7 +16,7 @@ Part of building the application in release involves setting `android:debuggable
 
 Back to the drawing table.
  
-From androidxref, the lookup code in the linker (**which version???**) says:
+From androidxref, the lookup code in the linker (Android 4.2.2) says:
 
     static unsigned find_linker_base(unsigned **elfdata) {
         int argc = (int) *elfdata;
@@ -30,9 +30,23 @@ From androidxref, the lookup code in the linker (**which version???**) says:
         vecs++;
     ...
 
-**remark about the weird comment which does not fit the code**
+This function is called first in `__linker_init` and `elfdata` is just `sp` that was passed to it as a parameter.
 
-Which means I can get to `auxv` myself if I just start from `envp` (which is accessible by `extern char ** environ`) and follow the same procedure. Very simple.
+So what I deduce from this code, is that the structure of the stack when the kernel returns from `execve` is this:
+
+![Stack right after return from execve](stack.png)
+
+At the very top we have a string pool. Basically all the argument and environment strings all bunched up. Below that there's the auxiliary vector `auxv`. Below that is a list of pointers to environment variables, separated from the `auxv` block with a `NULL` word. Then comes a list of pointers to the program arguments, again, separeted from the previous block with a `NULL` word, and finally the number of program arguemnts `argc`.
+
+There's just one thing that struck me as odd, it was the following comment:
+
+    /* The end of the environment block is marked by two NULL pointers */
+
+According to what I understand from the code, only one `NULL` word is skipped following the `envp` block.
+
+I attributed this to maybe an inexperienced programmer (working on the linker? hard to imagine), but I did not dwell on it.
+
+Anyway, this structure meant I can get to `auxv` myself if I just start from `envp` (which is accessible by `extern char ** environ` which libc exports) and follow the same procedure. Very simple.
 
 Commit. Push. Wait for the test results.
 
